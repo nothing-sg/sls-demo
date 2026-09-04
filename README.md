@@ -21,6 +21,10 @@ make frontend-run       # vite dev server on :5173, proxies /api -> :8000
 
 Run everything the CI pipeline runs locally with `make test lint`.
 
+## API docs
+
+FastAPI serves interactive docs automatically: Swagger UI at `/docs`, ReDoc at `/redoc`, and the raw schema at `/openapi.json` (with `backend-run` above, that's `http://localhost:8000/docs`). On the deployed API these three routes are intentionally left open to any caller — see `infra/modules/api.yaml` — while every other route requires a Cognito JWT; they only describe endpoint shapes, no PHI, and are the interface spec HITRUST assessors expect for an in-scope system (ADR-0003).
+
 ## Local database
 
 The backend defaults to a local Postgres at `localhost:5432` (see `backend/src/shared/config.py`) when no `APP_DATABASE_SECRET_ARN` is set. Point `APP_DATABASE_HOST`/`APP_DATABASE_PORT`/`APP_DATABASE_NAME` at whatever local Postgres you run; apply migrations with:

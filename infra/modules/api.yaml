@@ -88,10 +88,51 @@ Resources:
           APP_COGNITO_USER_POOL_ID: !Ref UserPool
           APP_COGNITO_APP_CLIENT_ID: !Ref UserPoolClient
       Events:
-        Api:
+        # Catch-all for the app's real routes (patients, appointments, health)
+        # — protected by the HttpApi's DefaultAuthorizer (Cognito). An
+        # explicitly-declared HttpApi (below) does NOT get an automatic
+        # catch-all route the way SAM's fully-implicit API shorthand does,
+        # so Path/Method must be given explicitly here.
+        ProxyRoute:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+        RootRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /
+            Method: ANY
+        # API documentation is intentionally public: it exposes only endpoint
+        # shapes (no PHI), and is the interface spec HITRUST assessors expect
+        # for an in-scope system (ADR-0003) — gating it behind Cognito would
+        # just block the people who need to read it.
+        DocsRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /docs
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        RedocRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /redoc
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        OpenApiSchemaRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /openapi.json
+            Method: GET
+            Auth:
+              Authorizer: NONE
 
   HttpApi:
     Type: AWS::Serverless::HttpApi
