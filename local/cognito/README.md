@@ -76,11 +76,12 @@ So `local-new-hire` ships as originally specified — no gap here.
 
 - **Auth flow.** `cognito-local` does not support `USER_SRP_AUTH` at all — only `USER_PASSWORD_AUTH`. The
   real pool's client (`infra/modules/api.yaml`) only allows `ALLOW_USER_SRP_AUTH`; this local pool's
-  client only allows `ALLOW_USER_PASSWORD_AUTH` + refresh tokens instead. Frontend code branches on
-  whether `VITE_COGNITO_LOCAL_ENDPOINT` is set to pick the flow — see the parent spec
-  (`.scratch/local-cognito-auth/spec.md`) and the relevant ADR for the full rationale. **This means local
-  testing cannot verify that real SRP auth works against production Cognito** — that has to be checked
-  against a real deployed pool.
+  client only allows `ALLOW_USER_PASSWORD_AUTH` + refresh tokens instead. `frontend/src/auth/cognito.ts`'s
+  `resolveLocalAuthOverride()` is the single seam that branches on whether `VITE_COGNITO_LOCAL_ENDPOINT`
+  is set to pick the flow (unset: no overrides at all, production behaves exactly as before this feature)
+  — see [ADR-0007](../../docs/adr/0007-local-auth-flow-divergence.md) for the full rationale. **This means
+  local testing cannot verify that real SRP auth works against production Cognito** — that has to be
+  checked against a real deployed pool.
 - **MFA.** Off locally; `"ON"` in production. `cognito-local` can't emulate TOTP MFA, so MFA
   enrollment/challenge UI can't be exercised locally at all.
 - **Username sign-in.** The real pool doesn't declare `UsernameAttributes`, so sign-in is by plain

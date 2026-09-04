@@ -19,6 +19,35 @@ import {
 // with the default SRP (USER_SRP_AUTH) flow; only the client library
 // issuing the same protocol changed.
 
+export type LocalAuthOverride =
+  | { userPoolEndpoint: string; authFlowType: "USER_PASSWORD_AUTH" }
+  | Record<string, never>;
+
+/** The one config-selection seam this feature (ADR-0007) depends on: whether
+ * `VITE_COGNITO_LOCAL_ENDPOINT` is set decides both the Amplify
+ * `userPoolEndpoint` override and the sign-in auth flow, in one place.
+ *
+ * `localEndpoint` set (by `make auth-run` — see local/cognito/README.md):
+ * routes Amplify at the local `cognito-local` server, and issues sign-in
+ * with `USER_PASSWORD_AUTH` — the only flow `cognito-local` supports; it
+ * cannot emulate `USER_SRP_AUTH` at all.
+ *
+ * `localEndpoint` unset (production, and any `.env.local` deliberately
+ * pointed at a real deployed pool): returns `{}`, so callers pass no
+ * `userPoolEndpoint` / `authFlowType` overrides at all — Amplify's own
+ * defaults (real endpoint, SRP) apply exactly as they did before this
+ * feature existed. This is the one part of the whole feature required to
+ * have zero effect on anyone not opting into local mode.
+ *
+ * Pure, no I/O — takes the env value as a parameter rather than reading
+ * `import.meta.env` itself, so it's directly unit-testable (see
+ * cognito.test.ts) without mocking Vite's env injection.
+ */
+export function resolveLocalAuthOverride(localEndpoint: string | undefined): LocalAuthOverride {
+  if (!localEndpoint) return {};
+  return { userPoolEndpoint: localEndpoint, authFlowType: "USER_PASSWORD_AUTH" };
+}
+
 let configured = false;
 
 function configureAmplify(): void {
@@ -32,11 +61,14 @@ function configureAmplify(): void {
     );
   }
 
+  const { userPoolEndpoint } = resolveLocalAuthOverride(import.meta.env.VITE_COGNITO_LOCAL_ENDPOINT);
+
   Amplify.configure({
     Auth: {
       Cognito: {
         userPoolId,
         userPoolClientId,
+        ...(userPoolEndpoint ? { userPoolEndpoint } : {}),
       },
     },
   });
@@ -49,7 +81,12 @@ export type SignInResult =
 
 export async function signIn(username: string, password: string): Promise<SignInResult> {
   configureAmplify();
-  const { isSignedIn, nextStep } = await amplifySignIn({ username, password });
+  const { authFlowType } = resolveLocalAuthOverride(import.meta.env.VITE_COGNITO_LOCAL_ENDPOINT);
+  const { isSignedIn, nextStep } = await amplifySignIn({
+    username,
+    password,
+    ...(authFlowType ? { options: { authFlowType } } : {}),
+  });
   if (isSignedIn) {
     return { status: "signedIn", session: await fetchAuthSession() };
   }
