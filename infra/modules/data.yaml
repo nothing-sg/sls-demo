@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Data layer: Aurora Serverless v2 (Postgres), one shared cluster, module-owned
+  tables (ADR-0002). KMS-encrypted at rest; credentials in Secrets Manager,
+  never in Lambda environment variables.
+
+Parameters:
+  Stage:
+    Type: String
+  VpcId:
+    Type: String
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+  LambdaSecurityGroupId:
+    Type: String
+  MinCapacity:
+    Type: Number
+    Default: 0.5
+  MaxCapacity:
+    Type: Number
+    Default: 4
+
+Resources:
+  DatabaseEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub Encrypts the sls-best-practice ${Stage} Aurora cluster (HIPAA/HITRUST at-rest requirement)
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: RootAccountAdmin
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: !Sub Aurora master credentials for sls-best-practice ${Stage}
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "app_admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnets for the Aurora cluster
+      SubnetIds: !Ref PrivateSubnetIds
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Aurora security group, inbound Postgres only from the Lambda SG.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroupId
+
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: aurora-postgresql
+      # EngineVersion intentionally omitted: pin it once you've validated a
+      # specific supported version for your environment (`aws rds
+      # describe-db-engine-versions --engine aurora-postgresql`) — a version
+      # hardcoded at scaffold time will eventually be deprecated for new
+      # cluster creation and break `sam deploy` on a fresh environment.
+      EngineMode: provisioned
+      DatabaseName: app
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VpcSecurityGroupIds: [!Ref DatabaseSecurityGroup]
+      StorageEncrypted: true
+      KmsKeyId: !Ref DatabaseEncryptionKey
+      BackupRetentionPeriod: 35 # near the max (35d); pair with periodic snapshot export for the 6yr HIPAA window
+      DeletionProtection: !If [IsProd, true, false]
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref MinCapacity
+        MaxCapacity: !Ref MaxCapacity
+
+  AuroraInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-postgresql
+      DBInstanceClass: db.serverless
+      DBClusterIdentifier: !Ref AuroraCluster
+      PubliclyAccessible: false
+
+  DatabaseSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DatabaseSecret
+      TargetId: !Ref AuroraCluster
+      TargetType: AWS::RDS::DBCluster
+
+Conditions:
+  IsProd: !Equals [!Ref Stage, prod]
+
+Outputs:
+  ClusterEndpoint:
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+  DatabaseSecretArn:
+    Value: !Ref DatabaseSecret

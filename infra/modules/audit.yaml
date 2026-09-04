@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Audit layer: CloudTrail (management + data-event) and the API access log
+  group, both retained per the HIPAA Security Rule §164.312(b) 6-year window.
+  This is infrastructure-level audit logging (who called what AWS API); the
+  application-level PHI access log lives in Postgres — see the audit_log
+  table (backend/src/audit/models.py) and ADR-0003.
+
+Parameters:
+  Stage:
+    Type: String
+
+Resources:
+  TrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: RetainSixYears
+            Status: Enabled
+            ExpirationInDays: 2190 # 6 years — HIPAA minimum retention for audit records
+
+  TrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TrailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt TrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${TrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  Trail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: TrailBucketPolicy
+    Properties:
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      S3BucketName: !Ref TrailBucket
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /sls-best-practice/${Stage}/api-access
+      RetentionInDays: 90 # infra-level access log, not the PHI audit trail — see description above
+
+Outputs:
+  ApiAccessLogGroupArn:
+    Value: !GetAtt ApiAccessLogGroup.Arn
+  TrailBucketName:
+    Value: !Ref TrailBucket

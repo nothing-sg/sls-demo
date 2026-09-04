@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+backend/openapi.json
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+frontend/src/api/schema.d.ts
+
+# SAM
+.aws-sam/
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store

@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Frontend layer: S3 (private, origin-access-controlled) behind CloudFront.
+  No PHI is served from here — the frontend is a static React bundle that
+  calls the API for anything patient-related. The API URL is baked into the
+  bundle at build time via VITE_API_BASE_URL (frontend/.env.example), not
+  injected by CloudFormation, so this template takes no API-related input.
+
+Parameters:
+  Stage:
+    Type: String
+
+Resources:
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub sls-best-practice-${Stage}-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true # swap for an ACM cert + custom domain per environment
+        DefaultCacheBehavior:
+          TargetOriginId: SiteOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # AWS Managed-CachingOptimized
+        Origins:
+          - Id: SiteOrigin
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            S3OriginConfig: {}
+            OriginAccessControlId: !Ref OriginAccessControl
+        CustomErrorResponses:
+          # SPA client-side routing: unknown paths fall back to index.html
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontOriginAccess
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+Outputs:
+  DistributionDomainName:
+    Value: !GetAtt Distribution.DomainName
+  SiteBucketName:
+    Value: !Ref SiteBucket

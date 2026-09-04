@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  sls-best-practice — serverless modular monolith (see AGENTS.md, ADR-0001).
+  Root template composing layered nested stacks: network, data, api, frontend, audit.
+
+Parameters:
+  Stage:
+    Type: String
+    AllowedValues: [dev, staging, prod]
+    Default: dev
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: Adjust per environment if VPC peering with other org VPCs is needed.
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: modules/network.yaml
+      Parameters:
+        Stage: !Ref Stage
+        VpcCidr: !Ref VpcCidr
+
+  DataStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: modules/data.yaml
+      Parameters:
+        Stage: !Ref Stage
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
+        LambdaSecurityGroupId: !GetAtt NetworkStack.Outputs.LambdaSecurityGroupId
+
+  AuditStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: modules/audit.yaml
+      Parameters:
+        Stage: !Ref Stage
+
+  ApiStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: modules/api.yaml
+      Parameters:
+        Stage: !Ref Stage
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
+        LambdaSecurityGroupId: !GetAtt NetworkStack.Outputs.LambdaSecurityGroupId
+        DatabaseSecretArn: !GetAtt DataStack.Outputs.DatabaseSecretArn
+        DatabaseClusterEndpoint: !GetAtt DataStack.Outputs.ClusterEndpoint
+        AuditLogGroupArn: !GetAtt AuditStack.Outputs.ApiAccessLogGroupArn
+
+  FrontendStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: modules/frontend.yaml
+      Parameters:
+        Stage: !Ref Stage
+
+Outputs:
+  ApiUrl:
+    Value: !GetAtt ApiStack.Outputs.ApiUrl
+  FrontendUrl:
+    Value: !GetAtt FrontendStack.Outputs.DistributionDomainName
+  DatabaseClusterEndpoint:
+    Value: !GetAtt DataStack.Outputs.ClusterEndpoint

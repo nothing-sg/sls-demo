@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Network layer: VPC with private-only subnets across two AZs. The API Lambda
+  and Aurora cluster both live in the private subnets — no public subnet is
+  created because nothing here needs a public IP (API Gateway + CloudFront
+  are the only public-facing surfaces, both external to this VPC).
+
+Parameters:
+  Stage:
+    Type: String
+  VpcCidr:
+    Type: String
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub sls-best-practice-${Stage}
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+
+  # Private subnets need outbound internet (Secrets Manager, CloudWatch, boto3
+  # calls to other AWS services) without being publicly reachable inbound.
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  NatSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 4, 8]]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+
+  NatPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  NatPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref NatPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  NatSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref NatSubnet
+      RouteTableId: !Ref NatPublicRouteTable
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref NatSubnet
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: API Lambda security group, outbound only, no inbound rules.
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Aurora cluster security group, inbound Postgres only from the Lambda SG.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+Outputs:
+  VpcId:
+    Value: !Ref Vpc
+  PrivateSubnetIds:
+    Value: !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
+  LambdaSecurityGroupId:
+    Value: !Ref LambdaSecurityGroup
+  DatabaseSecurityGroupId:
+    Value: !Ref DatabaseSecurityGroup
