@@ -24,6 +24,7 @@ dev = [
     "mypy>=1.11",
     "moto>=5.0",
     "faker>=28.0",
+    "uvicorn[standard]>=0.30", # local dev server only — Lambda uses Mangum, not uvicorn
 ]
 
 [tool.ruff]
