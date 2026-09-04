@@ -12,7 +12,9 @@ backend/openapi.json
 node_modules/
 dist/
 *.tsbuildinfo
-frontend/src/api/schema.d.ts
+# frontend/src/api/schema.d.ts is committed on purpose — it's the frontend's
+# typed API contract (ADR-0003, ADR-0005) and CI diffs a regenerated copy
+# against it to catch drift; `make gen-api` regenerates it from the backend.
 
 # SAM
 .aws-sam/

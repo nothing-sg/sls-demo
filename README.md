@@ -5,7 +5,7 @@ Serverless modular monolith for a healthcare application. See [`AGENTS.md`](./AG
 ## Stack
 
 - **Backend**: Python 3.12 / FastAPI / SQLAlchemy, one Lambda behind API Gateway (`backend/`)
-- **Frontend**: React + TypeScript + Vite, static-hosted on S3/CloudFront (`frontend/`)
+- **Frontend**: React 19 + TypeScript + Vite, shadcn/ui, TanStack Query + Table, react-router-dom, Cognito SRP auth, static-hosted on S3/CloudFront (`frontend/`) — see ADR-0005
 - **Data**: Aurora Serverless v2 (Postgres)
 - **IaC**: AWS SAM (`infra/`)
 - **Compliance**: HIPAA + HITRUST CSF baseline
@@ -24,6 +24,14 @@ Run everything the CI pipeline runs locally with `make test lint`.
 ## API docs
 
 FastAPI serves interactive docs automatically: Swagger UI at `/docs`, ReDoc at `/redoc`, and the raw schema at `/openapi.json` (with `backend-run` above, that's `http://localhost:8000/docs`). On the deployed API these three routes are intentionally left open to any caller — see `infra/modules/api.yaml` — while every other route requires a Cognito JWT; they only describe endpoint shapes, no PHI, and are the interface spec HITRUST assessors expect for an in-scope system (ADR-0003).
+
+## Frontend
+
+`make frontend-run` serves the app at `http://localhost:5173`, proxying `/api` to the backend on `:8000`. It needs a real, deployed Cognito User Pool to actually sign in — copy `VITE_COGNITO_USER_POOL_ID` / `VITE_COGNITO_CLIENT_ID` from `sam deploy`'s outputs into `frontend/.env.local` (see `frontend/.env.example`). Without them, the app still loads and redirects to `/login` correctly — it just can't complete a sign-in, and says so in the form rather than crashing.
+
+Staff accounts are admin-provisioned (`aws cognito-idp admin-create-user`), not self-service — first sign-in always goes through Cognito's "set a new password" step, which the login page handles.
+
+After changing a backend endpoint or Pydantic schema, run `make gen-api` to regenerate `frontend/src/api/schema.d.ts` — CI fails the build if you forget (see ADR-0003, ADR-0005).
 
 ## Roles (RBAC)
 
