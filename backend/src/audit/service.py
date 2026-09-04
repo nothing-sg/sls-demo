@@ -1,6 +1,14 @@
 from sqlalchemy.orm import Session
 
 from audit.models import AuditLogEntry
+from audit.repository import AuditRepository
+
+
+def list_recent(db: Session, *, limit: int = 100) -> list[AuditLogEntry]:
+    """Admin-only (see audit.api / ADR-0004) — the access log itself is a
+    compliance artifact, not something clinic ops needs day to day.
+    """
+    return AuditRepository(db).list_recent(limit=limit)
 
 
 def record_access(

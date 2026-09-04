@@ -26,3 +26,9 @@ class PatientRepository:
         self._db.commit()
         self._db.refresh(patient)
         return patient
+
+    def deactivate(self, patient: Patient) -> Patient:
+        patient.is_active = False
+        self._db.commit()
+        self._db.refresh(patient)
+        return patient

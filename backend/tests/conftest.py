@@ -43,13 +43,31 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return TestClient(app)
 
 
-@pytest.fixture()
-def auth_headers() -> dict[str, str]:
+def _bearer_headers(*, subject: str, role: str | None) -> dict[str, str]:
     # get_current_user decodes without verifying signature (dev-mode TODO in
     # shared/auth.py), so any well-formed unsigned JWT with a `sub` works here.
     import jwt
 
-    token = jwt.encode(
-        {"sub": "test-user", "custom:role": "staff"}, key="unused", algorithm="HS256"
-    )
+    claims: dict[str, str] = {"sub": subject}
+    if role is not None:
+        claims["custom:role"] = role
+    token = jwt.encode(claims, key="unused", algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def admin_headers() -> dict[str, str]:
+    return _bearer_headers(subject="test-admin", role="admin")
+
+
+@pytest.fixture()
+def clinic_ops_headers() -> dict[str, str]:
+    return _bearer_headers(subject="test-clinic-ops", role="clinic_ops")
+
+
+@pytest.fixture()
+def no_role_headers() -> dict[str, str]:
+    """Authenticated (valid JWT) but no role claim — require_role() must
+    reject this the same as an unrecognized role, per shared/auth.py.
+    """
+    return _bearer_headers(subject="test-no-role", role=None)

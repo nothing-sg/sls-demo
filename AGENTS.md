@@ -27,6 +27,10 @@ backend/src/<module>/
 
 `backend/src/app.py` assembles the FastAPI app from each module's router and wraps it with Mangum for Lambda.
 
+## RBAC
+
+Two roles — `admin` and `clinic_ops` (`shared/auth.Role`) — sourced from the Cognito `custom:role` claim. Gate an endpoint with `Depends(require_role(Role.ADMIN))` or `Depends(require_role(Role.CLINIC_OPS, Role.ADMIN))`; a missing or unrecognized role claim fails closed (403), there is no default-open role. See ADR-0004 for which endpoints require which role and why.
+
 ## Agent skills
 
 ### Issue tracker

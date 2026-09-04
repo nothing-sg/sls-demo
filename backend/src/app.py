@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from mangum import Mangum
 
+from audit.api import router as audit_router
 from patients.api import router as patients_router
 from scheduling.api import router as scheduling_router
 from shared.config import get_settings
@@ -16,6 +17,7 @@ app = FastAPI(
 
 app.include_router(patients_router)
 app.include_router(scheduling_router)
+app.include_router(audit_router)
 
 
 @app.get("/health")

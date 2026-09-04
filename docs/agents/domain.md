@@ -19,7 +19,8 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 ├── docs/adr/
 │   ├── 0001-serverless-modular-monolith.md
 │   ├── 0002-aurora-postgres-shared-database-module-ownership.md
-│   └── 0003-phi-safe-logging-and-audit-trail.md
+│   ├── 0003-phi-safe-logging-and-audit-trail.md
+│   └── 0004-rbac-admin-and-clinic-ops.md
 └── backend/src/
     ├── shared/       ← cross-module kernel (auth, db, logging, config)
     ├── patients/

@@ -11,15 +11,19 @@ Domain glossary for sls-best-practice. Single-context repo — see `docs/agents/
 - **Appointment**: a scheduled future Encounter that hasn't happened yet. An Appointment becomes (is linked to) an Encounter once it occurs; it is not the same record.
 - **PHI (Protected Health Information)**: any data element that could identify a patient in combination with health information, per HIPAA's 18 identifiers. Drives the redaction rules in `shared/logging.py` (ADR-0003).
 - **Audit Trail**: the immutable log of who accessed or changed what PHI, when, and why. Written by the `audit` module; every module's `service.py` calls into it on read and write of PHI-bearing records. Required by the HIPAA Security Rule (§164.312(b)) and HITRUST CSF.
-- **Minimum Necessary**: the HIPAA principle that a role should see only the PHI required for its task. Drives per-field authorization checks in each module's `service.py`, not just per-endpoint auth.
+- **Minimum Necessary**: the HIPAA principle that a role should see only the PHI required for its task. Drives endpoint-level Role authorization (`shared/auth.require_role`, ADR-0004) and per-field response shaping (e.g. `PatientSummary` excludes MRN/DOB for callers that don't need them).
+- **Role**: a staff member's RBAC role — `admin` or `clinic_ops` (see ADR-0004), sourced from the Cognito `custom:role` claim. Not a patient-facing concept; patients don't authenticate against this API.
+- **Admin**: the Role that can do everything `clinic_ops` can, plus administrative/compliance actions — deactivating a Patient record, reading the Audit Trail. Provisioned by another admin, never self-service.
+- **Clinic Ops**: the Role for day-to-day front-desk/scheduling staff — register/look up Patients, schedule/view Appointments. The majority of traffic.
 - **Module** (this repo's sense): a bounded unit of code under `backend/src/<module>/` that owns a set of tables and exposes access only through its `service.py`. Not a bounded context in the DDD/multi-repo sense — see ADR-0001 for why this repo stays single-context despite having multiple modules.
 
 ## Terms explicitly avoided
 
 - "Visit" — use **Encounter**.
-- "User" for a patient-facing person — use **Patient**; reserve "User" for internal staff accounts if that concept is introduced later.
+- "User" for a patient-facing person — use **Patient**; patients don't authenticate against this API. For staff accounts, say **Role** or name the role (**Admin**, **Clinic Ops**), not "User."
 - "Record" alone — ambiguous between a database row and a clinical record; say **Patient record**, **Encounter record**, etc.
+- "Staff" as a role name — the placeholder role string this glossary and ADR-0004 replaced; the actual roles are **Admin** and **Clinic Ops**.
 
 ## Gaps
 
-None yet — this glossary was seeded at project scaffolding time (`/setup-matt-pocock-skills`, 2026-09-04) alongside the initial modules (`patients`, `scheduling`, `audit`). Expect `/domain-modeling` to expand this as real features land.
+None yet — this glossary was seeded at project scaffolding time (`/setup-matt-pocock-skills`, 2026-09-04) alongside the initial modules (`patients`, `scheduling`, `audit`), then extended when RBAC (ADR-0004) landed. Expect `/domain-modeling` to expand this as real features land.

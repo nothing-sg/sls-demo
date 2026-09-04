@@ -61,3 +61,22 @@ class PatientService:
             resource_id=str(patient.id),
         )
         return patient
+
+    def deactivate_patient(self, patient_id: uuid.UUID, *, actor_subject: str) -> Patient:
+        """Admin-only (see patients.api / ADR-0004) — front-desk staff register
+        and look up patients but don't deactivate records.
+        """
+        patient = self._repo.get(patient_id)
+        if patient is None:
+            raise PatientNotFoundError(str(patient_id))
+
+        patient = self._repo.deactivate(patient)
+        audit_service.record_change(
+            self._db,
+            actor_subject=actor_subject,
+            action="update",
+            resource_type="patient",
+            resource_id=str(patient_id),
+            reason="deactivate",
+        )
+        return patient

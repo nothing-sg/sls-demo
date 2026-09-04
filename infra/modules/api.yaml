@@ -33,6 +33,17 @@ Resources:
           RequireLowercase: true
           RequireNumbers: true
           RequireSymbols: true
+      # `role` (admin | clinic_ops — see ADR-0004, backend/src/shared/auth.py)
+      # must be declared here before anything can set it on a user; it's
+      # Mutable so an admin can move someone between roles without a new
+      # user record, but NOT self-service — grant it via `aws cognito-idp
+      # admin-update-user-attributes`, never through a user-facing signup
+      # flow, or any authenticated user could hand themselves admin.
+      Schema:
+        - Name: role
+          AttributeDataType: String
+          Mutable: true
+          Required: false
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient

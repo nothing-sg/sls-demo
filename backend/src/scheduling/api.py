@@ -6,17 +6,20 @@ from sqlalchemy.orm import Session
 from patients.service import PatientNotFoundError
 from scheduling.schemas import AppointmentCreate, AppointmentRead, AppointmentWithPatient
 from scheduling.service import SchedulingError, SchedulingService
-from shared.auth import CurrentUser, get_current_user
+from shared.auth import CurrentUser, Role, require_role
 from shared.db import get_db_session
 
 router = APIRouter(prefix="/appointments", tags=["scheduling"])
+
+# Scheduling is clinic ops' day-to-day job; admins can do it too — see ADR-0004.
+_OPS_OR_ADMIN = require_role(Role.CLINIC_OPS, Role.ADMIN)
 
 
 @router.post("", response_model=AppointmentRead, status_code=status.HTTP_201_CREATED)
 def schedule_appointment(
     data: AppointmentCreate,
     db: Session = Depends(get_db_session),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_OPS_OR_ADMIN),
 ) -> AppointmentRead:
     service = SchedulingService(db)
     try:
@@ -32,7 +35,7 @@ def schedule_appointment(
 def list_patient_appointments(
     patient_id: uuid.UUID,
     db: Session = Depends(get_db_session),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_OPS_OR_ADMIN),
 ) -> list[AppointmentWithPatient]:
     service = SchedulingService(db)
     try:
