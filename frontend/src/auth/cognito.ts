@@ -49,9 +49,14 @@ export function resolveLocalAuthOverride(localEndpoint: string | undefined): Loc
 }
 
 let configured = false;
+// Cached alongside `configured` so signIn() can reuse the same
+// VITE_COGNITO_LOCAL_ENDPOINT-derived decision configureAmplify() already
+// made, instead of calling resolveLocalAuthOverride() a second time per
+// sign-in attempt.
+let cachedLocalAuthOverride: LocalAuthOverride = {};
 
-function configureAmplify(): void {
-  if (configured) return;
+function configureAmplify(): LocalAuthOverride {
+  if (configured) return cachedLocalAuthOverride;
 
   const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID;
   const userPoolClientId = import.meta.env.VITE_COGNITO_CLIENT_ID;
@@ -61,7 +66,8 @@ function configureAmplify(): void {
     );
   }
 
-  const { userPoolEndpoint } = resolveLocalAuthOverride(import.meta.env.VITE_COGNITO_LOCAL_ENDPOINT);
+  cachedLocalAuthOverride = resolveLocalAuthOverride(import.meta.env.VITE_COGNITO_LOCAL_ENDPOINT);
+  const { userPoolEndpoint } = cachedLocalAuthOverride;
 
   Amplify.configure({
     Auth: {
@@ -73,6 +79,7 @@ function configureAmplify(): void {
     },
   });
   configured = true;
+  return cachedLocalAuthOverride;
 }
 
 export type SignInResult =
@@ -80,8 +87,7 @@ export type SignInResult =
   | { status: "newPasswordRequired" };
 
 export async function signIn(username: string, password: string): Promise<SignInResult> {
-  configureAmplify();
-  const { authFlowType } = resolveLocalAuthOverride(import.meta.env.VITE_COGNITO_LOCAL_ENDPOINT);
+  const { authFlowType } = configureAmplify();
   const { isSignedIn, nextStep } = await amplifySignIn({
     username,
     password,

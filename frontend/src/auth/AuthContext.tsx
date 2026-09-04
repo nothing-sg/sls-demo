@@ -34,6 +34,13 @@ function userFromSession(session: AuthSession): CurrentUser {
   return { subject: String(claims["sub"]), role };
 }
 
+/** The JWT string form of a session's ID token, or null if the session has
+ * none (shouldn't happen for a signed-in session, but `tokens`/`idToken` are
+ * both optional on Amplify's `AuthSession` type). */
+function getIdTokenString(session: AuthSession): string | null {
+  return session.tokens?.idToken?.toString() ?? null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
 
@@ -44,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((session) => {
         if (cancelled) return;
         if (session) {
-          setToken(session.tokens?.idToken?.toString() ?? null);
+          setToken(getIdTokenString(session));
           setState({ status: "signedIn", user: userFromSession(session) });
         } else {
           setToken(null);
@@ -74,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setState({ status: "newPasswordRequired" });
           return;
         }
-        setToken(result.session.tokens?.idToken?.toString() ?? null);
+        setToken(getIdTokenString(result.session));
         setState({ status: "signedIn", user: userFromSession(result.session) });
       },
       async completeNewPassword(newPassword) {
@@ -82,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw new Error("completeNewPassword called with no pending challenge");
         }
         const session = await cognito.completeNewPassword(newPassword);
-        setToken(session.tokens?.idToken?.toString() ?? null);
+        setToken(getIdTokenString(session));
         setState({ status: "signedIn", user: userFromSession(session) });
       },
       signOut() {
