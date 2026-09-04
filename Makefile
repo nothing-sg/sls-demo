@@ -1,5 +1,5 @@
 .PHONY: backend-install backend-test backend-lint backend-run \
-        frontend-install frontend-build frontend-test frontend-lint \
+        frontend-install frontend-build frontend-test frontend-lint frontend-run \
         gen-api sam-build sam-validate test lint
 
 backend-install:
@@ -25,6 +25,9 @@ frontend-test:
 
 frontend-lint:
 	cd frontend && npm run lint
+
+frontend-run:
+	cd frontend && npm run dev
 
 gen-api:
 	cd backend && uv run python -c "import json,sys; sys.path.insert(0,'src'); from app import app; json.dump(app.openapi(), open('openapi.json','w'), indent=2)"

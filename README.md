@@ -16,7 +16,7 @@ Serverless modular monolith for a healthcare application. See [`AGENTS.md`](./AG
 make backend-install    # uv sync
 make frontend-install   # npm install
 make backend-run        # FastAPI dev server on :8000
-make frontend-build     # vite dev server is `cd frontend && npm run dev`, proxies /api -> :8000
+make frontend-run       # vite dev server on :5173, proxies /api -> :8000
 ```
 
 Run everything the CI pipeline runs locally with `make test lint`.
