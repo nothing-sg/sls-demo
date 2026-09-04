@@ -1,0 +1,13 @@
+{
+  "name": "sls-best-practice-local-cognito",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Seed script for the local cognito-local auth server used by `make auth-run`. Not part of the frontend build.",
+  "type": "module",
+  "scripts": {
+    "seed": "node seed.mjs"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1126.0"
+  }
+}

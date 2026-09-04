@@ -1,4 +1,4 @@
-import type { CognitoUser, CognitoUserSession } from "amazon-cognito-identity-js";
+import type { AuthSession } from "aws-amplify/auth";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import * as cognito from "@/auth/cognito";
@@ -15,7 +15,7 @@ export interface CurrentUser {
 type AuthState =
   | { status: "loading" }
   | { status: "signedOut" }
-  | { status: "newPasswordRequired"; pendingUser: CognitoUser }
+  | { status: "newPasswordRequired" }
   | { status: "signedIn"; user: CurrentUser };
 
 interface AuthContextValue {
@@ -27,11 +27,18 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function userFromSession(session: CognitoUserSession): CurrentUser {
-  const claims = session.getIdToken().decodePayload() as Record<string, unknown>;
+function userFromSession(session: AuthSession): CurrentUser {
+  const claims = session.tokens?.idToken?.payload ?? {};
   const rawRole = claims["custom:role"];
   const role: Role | null = rawRole === "admin" || rawRole === "clinic_ops" ? rawRole : null;
   return { subject: String(claims["sub"]), role };
+}
+
+/** The JWT string form of a session's ID token, or null if the session has
+ * none (shouldn't happen for a signed-in session, but `tokens`/`idToken` are
+ * both optional on Amplify's `AuthSession` type). */
+function getIdTokenString(session: AuthSession): string | null {
+  return session.tokens?.idToken?.toString() ?? null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -44,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((session) => {
         if (cancelled) return;
         if (session) {
-          setToken(session.getIdToken().getJwtToken());
+          setToken(getIdTokenString(session));
           setState({ status: "signedIn", user: userFromSession(session) });
         } else {
           setToken(null);
@@ -71,22 +78,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async signIn(username, password) {
         const result = await cognito.signIn(username, password);
         if (result.status === "newPasswordRequired") {
-          setState({ status: "newPasswordRequired", pendingUser: result.user });
+          setState({ status: "newPasswordRequired" });
           return;
         }
-        setToken(result.session.getIdToken().getJwtToken());
+        setToken(getIdTokenString(result.session));
         setState({ status: "signedIn", user: userFromSession(result.session) });
       },
       async completeNewPassword(newPassword) {
         if (state.status !== "newPasswordRequired") {
           throw new Error("completeNewPassword called with no pending challenge");
         }
-        const session = await cognito.completeNewPassword(state.pendingUser, newPassword);
-        setToken(session.getIdToken().getJwtToken());
+        const session = await cognito.completeNewPassword(newPassword);
+        setToken(getIdTokenString(session));
         setState({ status: "signedIn", user: userFromSession(session) });
       },
       signOut() {
-        cognito.signOut();
+        // Fire-and-forget: local state clears immediately (matching the
+        // prior synchronous amazon-cognito-identity-js behavior) rather
+        // than waiting on Amplify's signOut() round-trip.
+        cognito.signOut().catch(() => {
+          // Best-effort — local token/state is already cleared below
+          // regardless of whether the remote sign-out call succeeds.
+        });
         setToken(null);
         setState({ status: "signedOut" });
       },

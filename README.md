@@ -29,6 +29,8 @@ FastAPI serves interactive docs automatically: Swagger UI at `/docs`, ReDoc at `
 
 `make frontend-run` serves the app at `http://localhost:5173`, proxying `/api` to the backend on `:8000`. It needs a real, deployed Cognito User Pool to actually sign in — copy `VITE_COGNITO_USER_POOL_ID` / `VITE_COGNITO_CLIENT_ID` from `sam deploy`'s outputs into `frontend/.env.local` (see `frontend/.env.example`). Without them, the app still loads and redirects to `/login` correctly — it just can't complete a sign-in, and says so in the form rather than crashing.
 
+For local sign-in testing without a deployed Cognito User Pool at all, run `make auth-run` in its own terminal — see `local/cognito/README.md` for the local auth server, seeded test accounts, and known local-vs-production gaps.
+
 Staff accounts are admin-provisioned (`aws cognito-idp admin-create-user`), not self-service — first sign-in always goes through Cognito's "set a new password" step, which the login page handles.
 
 After changing a backend endpoint or Pydantic schema, run `make gen-api` to regenerate `frontend/src/api/schema.d.ts` — CI fails the build if you forget (see ADR-0003, ADR-0005).
