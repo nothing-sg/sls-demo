@@ -7,24 +7,25 @@ app's real login screen without a deployed AWS Cognito User Pool.
 ## Run it
 
 ```bash
-make frontend-install   # once — installs cognito-local into frontend/node_modules
-make auth-run            # starts the server, seeds it, then runs in the foreground
+make auth-run   # builds + starts the cognito-local container, then seeds it
 ```
 
-`make auth-run` is opt-in and never started by any other `make` target. It runs in its own terminal;
-`Ctrl+C` stops the server cleanly (no orphaned processes — verified).
+`make auth-run` is opt-in and never started by any other `make` target; it returns your terminal once
+seeding finishes (the server runs detached in Docker, not in the foreground). Stop it with `make auth-down`.
 
 Then run `make frontend-run` as usual and sign in at `http://localhost:5173` with one of the accounts below.
 
-**State is ephemeral by design.** `local/cognito/.cognito/` (cognito-local's on-disk database) is deleted
-and recreated at the start of every `make auth-run` — nothing persists across restarts, and the directory
-is gitignored.
+**State is ephemeral by design.** `make auth-run` always passes `--force-recreate`, so every run gets a
+brand-new container — cognito-local's on-disk database lives entirely inside the container (no bind mount)
+and is discarded with it. Nothing persists across restarts. See
+[ADR-0008](../../docs/adr/0008-local-dev-docker-compose.md) for why it's built this way instead of
+bind-mounting a host directory.
 
 ## What it does
 
-1. Starts `cognito-local` (an `npm install --save-dev cognito-local` devDependency of `frontend/`) on its
-   default port, `9229`.
-2. Runs `local/cognito/seed.mjs` once the server is reachable, which:
+1. Builds and starts the `cognito-local` service (`local/cognito/Dockerfile`, `docker-compose.yml` at the
+   repo root) on its default port, `9229`, via `docker compose up -d --wait --force-recreate cognito-local`.
+2. Runs `local/cognito/seed.mjs` once the container reports healthy, which:
    - creates a local User Pool with the `custom:role` schema attribute (matching
      `infra/modules/api.yaml`'s real pool and `backend/src/shared/auth.py`'s `Role` enum)
    - creates a User Pool Client with `ALLOW_USER_PASSWORD_AUTH` + `ALLOW_REFRESH_TOKEN_AUTH`
@@ -32,7 +33,7 @@ is gitignored.
    - writes `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_CLIENT_ID`, `VITE_COGNITO_LOCAL_ENDPOINT` into
      `frontend/.env.local` (creating the file if needed; only those three keys are touched — any other
      local overrides you've added stay untouched)
-3. Runs the server in the foreground.
+3. Leaves the server running detached in Docker (`make auth-down` to stop it).
 
 MFA is off on the local pool — a deliberate divergence from the real pool's `MfaConfiguration: "ON"`
 (`infra/modules/api.yaml`); `cognito-local` cannot honor TOTP MFA at all, and exercising MFA enrollment
@@ -86,9 +87,9 @@ So `local-new-hire` ships as originally specified — no gap here.
   enrollment/challenge UI can't be exercised locally at all.
 - **Username sign-in.** The real pool doesn't declare `UsernameAttributes`, so sign-in is by plain
   username (matching `frontend/src/pages/LoginPage.tsx`'s "Username" field). `cognito-local` defaults to
-  requiring email-shaped usernames; `make auth-run` overrides this via a `UserPoolDefaults.UsernameAttributes: []`
-  entry it writes into `local/cognito/.cognito/config.json` before starting the server (part of the
-  ephemeral reset — this file is recreated every run, not preserved).
+  requiring email-shaped usernames; this is overridden via a `UserPoolDefaults.UsernameAttributes: []`
+  entry in `local/cognito/cognito-local-config.json`, baked into the image at `.cognito/config.json`
+  (`local/cognito/Dockerfile`) rather than generated at runtime.
 - **JWT signature verification.** `backend/src/shared/auth.py` doesn't verify JWT signatures against
   Cognito's JWKS yet (existing TODO, unrelated to this feature) — unaffected either way by local vs. real
   Cognito.
@@ -97,6 +98,14 @@ So `local-new-hire` ships as originally specified — no gap here.
 
 - `local/cognito/seed.mjs` — the seed script (`@aws-sdk/client-cognito-identity-provider`, this
   directory's own devDependency — kept out of `frontend/`'s dependency tree entirely, so it has zero
-  production bundle impact).
+  production bundle impact). Still runs on the host, not in a container, since it writes directly to
+  `frontend/.env.local`.
 - `local/cognito/package.json` — only the seed script's dependency; not part of the Vite app.
-- `local/cognito/.cognito/` — `cognito-local`'s on-disk state (gitignored, wiped every `make auth-run`).
+- `local/cognito/Dockerfile` — builds the `cognito-local` npm package into its own image via `npm ci`,
+  rather than using a pre-built third-party image (ADR-0008).
+- `local/cognito/docker/package.json` + `package-lock.json` — pins `cognito-local`'s version and full
+  dependency tree for that build. Never installed on the host (that's `local/cognito/package.json`,
+  below) — regenerate with `cd local/cognito/docker && npm install --package-lock-only` after bumping
+  the version.
+- `local/cognito/cognito-local-config.json` — the static `UsernameAttributes: []` override, baked into
+  the image at build time.

@@ -1,6 +1,7 @@
 .PHONY: backend-install backend-test backend-lint backend-run \
         frontend-install frontend-build frontend-test frontend-lint frontend-run \
-        gen-api sam-build sam-validate test lint auth-run
+        gen-api sam-build sam-validate test lint \
+        db-up db-down auth-run auth-down
 
 backend-install:
 	cd backend && uv sync --group dev
@@ -11,7 +12,7 @@ backend-test:
 backend-lint:
 	cd backend && uv run ruff check src tests && uv run mypy src
 
-backend-run:
+backend-run: db-up
 	cd backend && uv run uvicorn app:app --app-dir src --reload
 
 frontend-install:
@@ -29,24 +30,30 @@ frontend-lint:
 frontend-run:
 	cd frontend && npm run dev
 
-# Local Cognito-compatible auth server (cognito-local), pre-seeded with test
-# accounts for local sign-in testing -- never a deployed AWS Cognito User
-# Pool. Opt-in, own terminal, never started by any other target. State is
-# ephemeral: local/cognito/.cognito/ is wiped before every start. See
-# local/cognito/README.md.
+# Local Postgres for the backend (see backend/src/shared/config.py /
+# db.py). Persists data across restarts in a named Docker volume; run
+# `cd backend && uv run alembic upgrade head` yourself after the first
+# `db-up`. See docker-compose.yml and docs/adr/0008-local-dev-docker-compose.md.
+db-up:
+	docker compose up -d --wait postgres
+
+db-down:
+	docker compose stop postgres
+
+# Local Cognito-compatible auth server (cognito-local, containerized), for
+# local sign-in testing without a deployed AWS Cognito User Pool. Opt-in,
+# never started by any other target. State is ephemeral: --force-recreate
+# guarantees a fresh container (and therefore a wiped cognito-local
+# database) on every `make auth-run`, same guarantee the old
+# rm -rf local/cognito/.cognito gave. See local/cognito/README.md and
+# docs/adr/0008-local-dev-docker-compose.md.
 auth-run:
-	rm -rf local/cognito/.cognito
-	mkdir -p local/cognito/.cognito
-	echo '{"UserPoolDefaults":{"UsernameAttributes":[]}}' > local/cognito/.cognito/config.json
+	docker compose up -d --wait --force-recreate cognito-local
 	[ -d local/cognito/node_modules ] || (cd local/cognito && npm install)
-	cd local/cognito && ( \
-	  ../../frontend/node_modules/.bin/cognito-local & \
-	  COGNITO_PID=$$!; \
-	  trap 'kill $$COGNITO_PID 2>/dev/null' EXIT INT TERM; \
-	  until curl -s -o /dev/null http://localhost:9229/; do sleep 0.3; done; \
-	  node seed.mjs; \
-	  wait $$COGNITO_PID \
-	)
+	cd local/cognito && node seed.mjs
+
+auth-down:
+	docker compose rm -sf cognito-local
 
 gen-api:
 	cd backend && uv run python -c "import json,sys; sys.path.insert(0,'src'); from app import app; json.dump(app.openapi(), open('openapi.json','w'), indent=2)"

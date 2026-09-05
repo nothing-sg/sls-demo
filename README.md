@@ -15,7 +15,7 @@ Serverless modular monolith for a healthcare application. See [`AGENTS.md`](./AG
 ```bash
 make backend-install    # uv sync
 make frontend-install   # npm install
-make backend-run        # FastAPI dev server on :8000
+make backend-run        # FastAPI dev server on :8000 (starts local Postgres first)
 make frontend-run       # vite dev server on :5173, proxies /api -> :8000
 ```
 
@@ -29,7 +29,7 @@ FastAPI serves interactive docs automatically: Swagger UI at `/docs`, ReDoc at `
 
 `make frontend-run` serves the app at `http://localhost:5173`, proxying `/api` to the backend on `:8000`. It needs a real, deployed Cognito User Pool to actually sign in — copy `VITE_COGNITO_USER_POOL_ID` / `VITE_COGNITO_CLIENT_ID` from `sam deploy`'s outputs into `frontend/.env.local` (see `frontend/.env.example`). Without them, the app still loads and redirects to `/login` correctly — it just can't complete a sign-in, and says so in the form rather than crashing.
 
-For local sign-in testing without a deployed Cognito User Pool at all, run `make auth-run` in its own terminal — see `local/cognito/README.md` for the local auth server, seeded test accounts, and known local-vs-production gaps.
+For local sign-in testing without a deployed Cognito User Pool at all, run `make auth-run` — see `local/cognito/README.md` for the local auth server, seeded test accounts, and known local-vs-production gaps.
 
 Staff accounts are admin-provisioned (`aws cognito-idp admin-create-user`), not self-service — first sign-in always goes through Cognito's "set a new password" step, which the login page handles.
 
@@ -48,11 +48,13 @@ token = jwt.encode({"sub": "local-dev", "custom:role": "admin"}, key="unused", a
 
 ## Local database
 
-The backend defaults to a local Postgres at `localhost:5432` (see `backend/src/shared/config.py`) when no `APP_DATABASE_SECRET_ARN` is set. Point `APP_DATABASE_HOST`/`APP_DATABASE_PORT`/`APP_DATABASE_NAME` at whatever local Postgres you run; apply migrations with:
+`make db-up` starts a local Postgres in Docker (`docker-compose.yml`), matching the connection the backend defaults to when no `APP_DATABASE_SECRET_ARN` is set (see `backend/src/shared/config.py` / `db.py`) — `make backend-run` already depends on `db-up`, so you don't normally need to run it yourself. Data persists in a named Docker volume across restarts; apply migrations once after the first start (and again after pulling new ones):
 
 ```bash
 cd backend && uv run alembic upgrade head
 ```
+
+`make db-down` stops the container without deleting its data. To point at a Postgres you're managing yourself instead, override `APP_DATABASE_HOST`/`APP_DATABASE_PORT`/`APP_DATABASE_NAME` and skip `make db-up` entirely. See [ADR-0008](./docs/adr/0008-local-dev-docker-compose.md) for why this is Docker-based rather than a "bring your own Postgres" instruction.
 
 ## Deploying
 

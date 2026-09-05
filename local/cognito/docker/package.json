@@ -1,0 +1,8 @@
+{
+  "name": "cognito-local-image",
+  "private": true,
+  "description": "Pins cognito-local's full dependency tree for local/cognito/Dockerfile's `npm ci`. Not run on the host — see ../../README.md.",
+  "dependencies": {
+    "cognito-local": "5.3.0"
+  }
+}

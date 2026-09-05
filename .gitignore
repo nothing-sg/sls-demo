@@ -19,9 +19,6 @@ dist/
 # SAM
 .aws-sam/
 
-# Local Cognito auth server (make auth-run) -- ephemeral, wiped on every
-# start; see local/cognito/README.md.
-local/cognito/.cognito/
 
 # Env
 .env

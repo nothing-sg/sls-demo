@@ -1,0 +1,56 @@
+# Local dev data services only -- backend and frontend still run natively on
+# the host (`make backend-run` / `make frontend-run`), not in containers.
+# See docs/adr/0008-local-dev-docker-compose.md for why these two services
+# are shaped the way they are.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      # Must match the hardcoded local connection string in
+      # backend/src/shared/db.py (postgresql+psycopg://app:app@...) -- these
+      # aren't independently configurable via APP_DATABASE_* env vars.
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  cognito-local:
+    build: ./local/cognito
+    environment:
+      # cognito-local defaults to binding 127.0.0.1, which is only reachable
+      # from inside the container's own network namespace -- the published
+      # port would look healthy (the healthcheck below runs in-container) but
+      # be unreachable from the host. This also becomes the issued JWTs'
+      # `iss` claim, but nothing validates that currently (backend's JWKS
+      # signature check is a separate pre-existing TODO), so it's cosmetic.
+      HOST: "0.0.0.0"
+    ports:
+      - "9229:9229"
+    healthcheck:
+      # Not an HTTP status check: cognito-local's real endpoints are POSTs
+      # with an X-Amz-Target header, so a plain GET / can legitimately 404
+      # while the server is perfectly healthy. This only confirms the port
+      # is accepting connections, matching what `make auth-run`'s old
+      # `curl -s -o /dev/null` poll actually checked (a response, not a
+      # status code).
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('net').createConnection(9229,'localhost').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))",
+        ]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  postgres-data:
