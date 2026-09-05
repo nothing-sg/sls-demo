@@ -201,7 +201,15 @@ real. Nothing in `backend`, Postgres, `docker-compose.yml`, or production Cognit
     ngrok account: that ngrok's actual edge enforces Basic Auth as documented (challenges an
     unauthenticated request, admits one with the right credentials), that a real public
     `*.ngrok-free.app` URL is reachable from outside the developer's machine, and the
-    two-simultaneous-tunnels question above. `local/ngrok/README.md`'s "Empirical verification
-    status" section tracks these same open items in more mechanical detail.
+    two-simultaneous-tunnels question above. It also does not include the standalone check
+    ticket 03 originally called for — a raw SDK `InitiateAuth` call against the tunneled
+    `cognito-local` endpoint, succeeding independently of whether the frontend tunnel is up at
+    all. That check was absorbed into the combined browser sign-in above instead, which
+    exercises `cognito-local` only together with the frontend tunnel, not in isolation; the two
+    are close enough in practice (the combined check is strictly more end-to-end) that this
+    wasn't treated as a blocking gap, but it's a real, distinct claim the combined check doesn't
+    literally make, so it's named here rather than left implicit. `local/ngrok/README.md`'s
+    "Empirical verification status" section tracks these same open items in more mechanical
+    detail.
 - **`local/ngrok/`'s dependencies stay isolated**, same pattern as `local/cognito/`
   (ADR-0007/0008): nothing here touches `frontend/`'s production dependency graph or bundle.
