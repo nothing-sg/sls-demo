@@ -104,9 +104,10 @@ to already be reachable from a non-loopback interface with no compose changes.
   the container's non-loopback bind) without needing real Tailscale, exactly as ADR-0007's local/production
   auth-flow divergence and ADR-0008's Docker Compose port-binding fix were each verified empirically rather
   than assumed from documentation.
-- `PHONE_HOST` unset is the only configuration any CI job or automated test ever sees; `make backend-lint`,
-  `make backend-test`, `make frontend-lint`, `make frontend-test`, and `make frontend-build` all pass
-  unchanged with it unset and Tailscale entirely absent from the environment.
+- `PHONE_HOST` unset is the only configuration any CI job or automated test ever sees. Verified, not assumed:
+  `make backend-lint`, `make backend-test`, `make frontend-lint`, `make frontend-test`, and `make
+  frontend-build` were each run for real with `PHONE_HOST` unset and Tailscale entirely absent from the
+  environment, and all five passed.
 - A future Mac rename or tailnet rename changes the hostname Tailscale hands out, but not its `.ts.net`
   suffix, so the `allowedHosts` entry keeps working without a code change — only the developer's own
   `PHONE_HOST` value needs updating.
