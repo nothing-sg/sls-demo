@@ -1,7 +1,8 @@
 .PHONY: backend-install backend-test backend-lint backend-run \
         frontend-install frontend-build frontend-test frontend-lint frontend-run \
         gen-api sam-build sam-validate test lint \
-        db-up db-down auth-run auth-down
+        db-up db-down auth-run auth-down \
+        tunnel-up tunnel-down
 
 backend-install:
 	cd backend && uv sync --group dev
@@ -54,6 +55,19 @@ auth-run:
 
 auth-down:
 	docker compose rm -sf cognito-local
+
+# Two independently-identifiable ngrok tunnels -- one fronting the frontend
+# dev server (:5173), one fronting cognito-local (:9229) -- for sharing a
+# live demo with a third party (see .scratch/public-access-ngrok/spec.md).
+# Opt-in, never started by any other target; owns its own process lifecycle
+# independently of db-up/auth-run/frontend-run. Requires the ngrok CLI and a
+# one-time `ngrok config add-authtoken <token>` -- see local/ngrok/README.md.
+# Only returns once ngrok's local API confirms both tunnels are up.
+tunnel-up:
+	./local/ngrok/tunnel-up.sh
+
+tunnel-down:
+	./local/ngrok/tunnel-down.sh
 
 gen-api:
 	cd backend && uv run python -c "import json,sys; sys.path.insert(0,'src'); from app import app; json.dump(app.openapi(), open('openapi.json','w'), indent=2)"

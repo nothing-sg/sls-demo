@@ -1,0 +1,3 @@
+# tunnel-up.sh's PID files and per-tunnel ngrok logs -- ephemeral, per-session,
+# never something to commit or clean up by hand (tunnel-down.sh removes them).
+.run/
