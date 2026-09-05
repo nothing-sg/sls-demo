@@ -32,6 +32,23 @@ const LOCAL_ENDPOINT = "http://localhost:9229";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_ENV_LOCAL = path.resolve(__dirname, "../../frontend/.env.local");
 
+// This script's own CognitoIdentityProviderClient (below) always talks to
+// cognito-local via LOCAL_ENDPOINT -- it always runs on the same host as the
+// cognito-local container (`make auth-run` / `make auth-run-public` both
+// start that container locally), so it always reaches it via localhost,
+// regardless of how a browser will reach it later. PUBLIC_ENDPOINT is ONLY
+// the value written to frontend/.env.local's VITE_COGNITO_LOCAL_ENDPOINT,
+// for later browser/Amplify use from wherever the recipient's browser
+// actually is. Don't conflate the two.
+//
+// `make auth-run-public` sets COGNITO_LOCAL_PUBLIC_ENDPOINT to the
+// cognito-local ngrok tunnel's current public URL (looked up via
+// local/ngrok/lookupTunnel.mjs) before invoking this script. Plain
+// `make auth-run` leaves it unset, so PUBLIC_ENDPOINT falls back to
+// LOCAL_ENDPOINT and behavior is byte-for-byte unchanged from before this
+// distinction existed.
+const PUBLIC_ENDPOINT = process.env.COGNITO_LOCAL_PUBLIC_ENDPOINT || LOCAL_ENDPOINT;
+
 const SEED_USERS = {
   admin: {
     username: "local-admin",
@@ -171,9 +188,14 @@ async function main() {
   await writeEnvLocal({
     VITE_COGNITO_USER_POOL_ID: userPoolId,
     VITE_COGNITO_CLIENT_ID: clientId,
-    VITE_COGNITO_LOCAL_ENDPOINT: LOCAL_ENDPOINT,
+    VITE_COGNITO_LOCAL_ENDPOINT: PUBLIC_ENDPOINT,
   });
   console.log(`Wrote ${FRONTEND_ENV_LOCAL}`);
+  if (PUBLIC_ENDPOINT !== LOCAL_ENDPOINT) {
+    console.log(
+      `(VITE_COGNITO_LOCAL_ENDPOINT points at the public tunnel URL ${PUBLIC_ENDPOINT}; this script's own connection above stayed on ${LOCAL_ENDPOINT})`
+    );
+  }
 
   console.log("\nDone. Seeded accounts:");
   console.log(`  ${SEED_USERS.admin.username} / ${SEED_USERS.admin.password}  (custom:role=admin)`);
