@@ -56,6 +56,25 @@ next `make auth-run` resets everything).
 
 These are placeholder credentials for a local, ephemeral, non-production auth server only — not secrets.
 
+## Phone access via Tailscale
+
+Set `PHONE_HOST` to your Mac's Tailscale hostname before running `make auth-run` (and `make frontend-run`)
+to seed `frontend/.env.local`'s `VITE_COGNITO_LOCAL_ENDPOINT` with that hostname instead of `localhost`:
+
+```bash
+PHONE_HOST=<your-mac>.<your-tailnet>.ts.net make auth-run
+```
+
+This is necessary (not just convenient) because Amplify's client-side auth calls hit
+`VITE_COGNITO_LOCAL_ENDPOINT` directly from the phone's own browser — unlike `/api`, which is proxied
+server-side by Vite — and `localhost` from the phone's perspective resolves to the phone itself, not this
+Mac. The seed script's own connection to `cognito-local` (the `CognitoIdentityProviderClient` endpoint)
+always stays `http://localhost:9229` regardless of `PHONE_HOST`, since the script always runs on the same
+host as the container it's seeding. Tailscale must already be installed and signed into on both your phone
+and your Mac — a manual, one-time step this repo doesn't automate. See
+[ADR-0009](../../docs/adr/0009-phone-access-via-tailscale.md) for the full rationale, and the top-level
+[`README.md`](../../README.md#phone-access-via-tailscale) for the frontend side of this same switch.
+
 ## Empirical check: does `AdminCreateUser` actually produce `FORCE_CHANGE_PASSWORD` locally?
 
 **Yes — confirmed by live testing against a running `cognito-local` instance, not just by reading its

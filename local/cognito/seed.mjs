@@ -28,9 +28,23 @@ import {
   AdminSetUserPasswordCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 
+// This script always runs on the same host as cognito-local (started by
+// `make auth-run` just before this runs), so it always reaches it via
+// localhost regardless of PHONE_HOST -- this is the endpoint the
+// CognitoIdentityProviderClient below actually connects to, and it must
+// stay localhost even in phone mode.
 const LOCAL_ENDPOINT = "http://localhost:9229";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_ENV_LOCAL = path.resolve(__dirname, "../../frontend/.env.local");
+
+// Phone testing over Tailscale (ADR-0009): when PHONE_HOST is set, the
+// *value written* to frontend/.env.local's VITE_COGNITO_LOCAL_ENDPOINT is
+// this Tailscale hostname instead of localhost, because that value is read
+// by Amplify running in the phone's own browser -- from the phone's
+// perspective "localhost" means the phone itself, not this Mac. Unset (the
+// default), this is identical to LOCAL_ENDPOINT above, so behavior is
+// unchanged from before this feature.
+const SEEDED_ENDPOINT = process.env.PHONE_HOST ? `http://${process.env.PHONE_HOST}:9229` : LOCAL_ENDPOINT;
 
 const SEED_USERS = {
   admin: {
@@ -171,7 +185,7 @@ async function main() {
   await writeEnvLocal({
     VITE_COGNITO_USER_POOL_ID: userPoolId,
     VITE_COGNITO_CLIENT_ID: clientId,
-    VITE_COGNITO_LOCAL_ENDPOINT: LOCAL_ENDPOINT,
+    VITE_COGNITO_LOCAL_ENDPOINT: SEEDED_ENDPOINT,
   });
   console.log(`Wrote ${FRONTEND_ENV_LOCAL}`);
 

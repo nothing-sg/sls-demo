@@ -30,6 +30,28 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
+    // Phone testing over Tailscale (ADR-0009): opt-in via PHONE_HOST, set to
+    // the developer's Tailscale hostname (e.g. `PHONE_HOST=my-mac.tailnet.ts.net
+    // make frontend-run`). Unset (the default), this spreads an empty object
+    // and the server block is byte-for-byte what it was before this feature —
+    // no `host`, no `allowedHosts`, dev server stays localhost-only.
+    ...(process.env.PHONE_HOST
+      ? {
+          // Bind externally so the phone's browser (reaching this Mac via its
+          // Tailscale-assigned interface) can open a TCP connection at all —
+          // Vite's default `host` only listens on loopback.
+          host: true,
+          // Vite 5.4.x's hostCheckMiddleware 403s any request whose Host
+          // header isn't an IP literal, localhost, or explicitly allowed
+          // here (confirmed by reading node_modules/vite's own
+          // isHostAllowedWithoutCache, not assumed from docs). A leading-dot
+          // entry matches as a suffix (`hostname.endsWith(allowedHost)`), so
+          // this allows any `*.ts.net` Tailscale hostname rather than
+          // pinning today's exact device name — a later machine/tailnet
+          // rename keeps working without an edit. See ADR-0009.
+          allowedHosts: [".ts.net"],
+        }
+      : {}),
   },
   build: {
     // Route-level code splitting (see App.tsx's React.lazy pages) already

@@ -31,6 +31,25 @@ FastAPI serves interactive docs automatically: Swagger UI at `/docs`, ReDoc at `
 
 For local sign-in testing without a deployed Cognito User Pool at all, run `make auth-run` — see `local/cognito/README.md` for the local auth server, seeded test accounts, and known local-vs-production gaps.
 
+### Phone access via Tailscale
+
+To open the app on your phone (e.g. to check mobile rendering or role-gated UI on a real device), install
+and sign into [Tailscale](https://tailscale.com/) on both your phone and your Mac — a one-time, manual step,
+not automated by this repo. Then set `PHONE_HOST` to your Mac's Tailscale hostname (`tailscale status` on
+the Mac shows it, or check the Tailscale menu-bar app) before starting the dev servers:
+
+```bash
+PHONE_HOST=<your-mac>.<your-tailnet>.ts.net make frontend-run
+PHONE_HOST=<your-mac>.<your-tailnet>.ts.net make auth-run
+```
+
+With `PHONE_HOST` set, Vite binds externally and allow-lists your tailnet's `.ts.net` suffix, and the
+seeded `VITE_COGNITO_LOCAL_ENDPOINT` points at your Tailscale hostname instead of `localhost` (needed because
+Amplify's sign-in calls run in the phone's own browser). On your phone, connected to the same tailnet, open
+`http://<PHONE_HOST>:5173`. Leaving `PHONE_HOST` unset leaves both targets completely unchanged — see
+[ADR-0009](./docs/adr/0009-phone-access-via-tailscale.md) for why Tailscale (not a public tunnel) and why the
+hostname is explicit rather than auto-detected.
+
 Staff accounts are admin-provisioned (`aws cognito-idp admin-create-user`), not self-service — first sign-in always goes through Cognito's "set a new password" step, which the login page handles.
 
 After changing a backend endpoint or Pydantic schema, run `make gen-api` to regenerate `frontend/src/api/schema.d.ts` — CI fails the build if you forget (see ADR-0003, ADR-0005).
