@@ -1,5 +1,5 @@
 .PHONY: backend-install backend-test backend-lint backend-run \
-        frontend-install frontend-build frontend-test frontend-lint frontend-run \
+        frontend-install frontend-build frontend-test frontend-lint frontend-run frontend-run-public \
         gen-api sam-build sam-validate test lint \
         db-up db-down auth-run auth-down auth-run-public cognito-local-up \
         tunnel-up tunnel-down
@@ -30,6 +30,19 @@ frontend-lint:
 
 frontend-run:
 	cd frontend && npm run dev
+
+# Shares a live demo of the frontend dev server with a third party over the
+# "frontend" ngrok tunnel (see .scratch/public-access-ngrok/spec.md). Opt-in;
+# `frontend-run`'s own behavior is completely unchanged. Requires
+# `make tunnel-up` to already be running -- fails with a clear message
+# rather than falling back to localhost if it isn't. Generates a fresh
+# Basic Auth username/password every time it runs, gates the tunnel with
+# it, prints both to the terminal (never to a file), and starts Vite bound
+# externally with `allowedHosts` set to that exact tunnel hostname. See
+# local/ngrok/frontendRunPublic.mjs for the full flow and its empirical
+# verification status.
+frontend-run-public:
+	node local/ngrok/frontendRunPublic.mjs
 
 # Local Postgres for the backend (see backend/src/shared/config.py /
 # db.py). Persists data across restarts in a named Docker volume; run

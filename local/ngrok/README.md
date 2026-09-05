@@ -78,6 +78,17 @@ while it runs) and cleans up its log/config files.
   `make tunnel-down` call into. `tunnel-up.sh` generates `local/ngrok/.run/ngrok.yml` (a
   two-tunnel ngrok config) and starts one `ngrok start --all` process from it; `tunnel-down.sh`
   stops that one process and removes the generated files.
+- `frontendRunPublic.mjs` — `make frontend-run-public`'s orchestrator (ticket 02). Requires
+  `tunnel-up` to already be running (fails with a message pointing at `make tunnel-up`
+  otherwise, via `lookupTunnelUrl()`). Generates a fresh Basic Auth username/password every
+  time it runs and gates the `frontend` tunnel with it by deleting and recreating *only* that
+  tunnel through ngrok's local agent API (not by editing `tunnel-up.sh`'s config file, which
+  wouldn't affect an already-running agent without also restarting the sibling
+  `cognito-local` tunnel — see the comment at the top of the file for the full reasoning).
+  Prints the credentials and the tunnel's current URL to the terminal (never to a file, and
+  note the URL is freshly re-minted at this step, not whatever `tunnel-up` printed earlier),
+  then execs `npm run dev` in `frontend/` with the exact tunnel hostname wired into Vite's
+  `allowedHosts` (see `frontend/vite.config.ts`).
 
 ## Empirical verification status (see also the top-level task report)
 
@@ -99,3 +110,18 @@ while it runs) and cleans up its log/config files.
   `waitForTunnels.mjs`'s timeout-and-log-dump path; it does not currently special-case that
   failure mode. Confirm this for real the first time an authtoken is available, and update
   this section (and the eventual ADR) with the actual finding.
+- `frontendRunPublic.mjs`'s delete-then-recreate-with-`basic_auth` call against
+  `POST http://127.0.0.1:4040/api/tunnels` (ticket 02) is **not verified against a live
+  tunnel** for the same no-authtoken reason — a "frontend" tunnel never reaches "up" in this
+  environment, so there's nothing to delete/recreate. The `basic_auth` field name and its
+  `["user:pass", ...]` shape are corroborated by ngrok's published agent-config-v2 docs
+  (<https://ngrok.com/docs/agent/config/v2/#tunnel-configurations>) and by the agent API docs'
+  statement that `POST /api/tunnels`' "parameter names and behaviors are identical to those
+  defined in the configuration file" (<https://ngrok.com/docs/agent/api/>) — not by an actual
+  successful call. What *was* verified independently of a live tunnel: Vite's `allowedHosts`
+  exact-match behavior (a real `vite` dev server, started with `NGROK_FRONTEND_HOST` set to a
+  synthetic hostname, accepts a `curl` request carrying that exact `Host` header and rejects
+  one carrying a different host or a suffix of it) — see the top-level task report for the
+  exact commands. Whoever first runs `make frontend-run-public` with a real authtoken
+  configured should confirm the recreate-with-`basic_auth` call actually gates the tunnel as
+  expected and flag it here (and in the eventual ADR) if ngrok's actual behavior differs.

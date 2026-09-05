@@ -5,6 +5,25 @@ import react from "@vitejs/plugin-react";
 /// <reference types="vitest/config" />
 import { defineConfig } from "vitest/config";
 
+// `make frontend-run-public` (local/ngrok/frontendRunPublic.mjs) sets this to
+// the *exact* current ngrok "frontend" tunnel hostname (e.g.
+// "abcd1234.ngrok-free.app", no scheme, no path) and re-execs `npm run dev`
+// with it in the environment, after confirming that tunnel is up and gating
+// it with fresh Basic Auth -- see that file for the full flow. Plain
+// `make frontend-run` never sets this, so `host`/`allowedHosts` stay at
+// Vite's defaults (bind to localhost only) exactly as before this feature.
+//
+// This MUST be an exact hostname, never a leading-dot suffix pattern: unlike
+// Tailscale's `.ts.net` (a private namespace scoped to one tailnet, safe as a
+// wildcard), ngrok's free-tier domains (`*.ngrok-free.app`) are a shared
+// public suffix used by every ngrok account -- a suffix wildcard here would
+// accept a `Host` header claiming to be anyone else's unrelated ngrok
+// tunnel, not just this one. Vite's own allowedHosts matching (see
+// `isHostAllowedWithoutCache` in vite/dist/node/chunks/*.js) only treats a
+// *leading-dot* entry as a suffix match; a bare hostname string is an exact
+// match, which is what's used here.
+const publicTunnelHost = process.env.NGROK_FRONTEND_HOST;
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Historically needed for amazon-cognito-identity-js's crypto dependencies
@@ -23,6 +42,8 @@ export default defineConfig({
     },
   },
   server: {
+    host: publicTunnelHost ? true : undefined,
+    allowedHosts: publicTunnelHost ? [publicTunnelHost] : undefined,
     proxy: {
       "/api": {
         target: "http://localhost:8000",
