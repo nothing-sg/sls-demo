@@ -1,0 +1,10 @@
+{
+  "name": "sls-best-practice-local-ngrok",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Shared ngrok tunnel-lookup utility for `make tunnel-up`/`tunnel-down` (and, later, the ngrok-backed frontend-run-public/auth-run-public targets). Not part of the frontend build.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
