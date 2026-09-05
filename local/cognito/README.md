@@ -15,6 +15,11 @@ seeding finishes (the server runs detached in Docker, not in the foreground). St
 
 Then run `make frontend-run` as usual and sign in at `http://localhost:5173` with one of the accounts below.
 
+**Sharing this with someone outside your machine?** `make auth-run-public` is a drop-in
+replacement for `make auth-run` that seeds `VITE_COGNITO_LOCAL_ENDPOINT` with a public ngrok
+tunnel URL instead of `localhost`, for use alongside `make frontend-run-public` — see
+`local/ngrok/README.md` and [ADR-0009](../../docs/adr/0009-public-access-via-ngrok.md).
+
 **State is ephemeral by design.** `make auth-run` always passes `--force-recreate`, so every run gets a
 brand-new container — cognito-local's on-disk database lives entirely inside the container (no bind mount)
 and is discarded with it. Nothing persists across restarts. See

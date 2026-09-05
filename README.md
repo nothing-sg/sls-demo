@@ -35,6 +35,30 @@ Staff accounts are admin-provisioned (`aws cognito-idp admin-create-user`), not 
 
 After changing a backend endpoint or Pydantic schema, run `make gen-api` to regenerate `frontend/src/api/schema.d.ts` — CI fails the build if you forget (see ADR-0003, ADR-0005).
 
+### Sharing a live demo publicly (ngrok)
+
+To let someone with no access to your machine or network — no VPN, no special software — try
+a live demo of your local dev stack through a real HTTPS link:
+
+```bash
+make tunnel-up             # starts two ngrok tunnels: frontend + cognito-local
+make frontend-run-public   # like frontend-run, but bound to the frontend tunnel, gated by a fresh Basic Auth password
+make auth-run-public       # like auth-run, but seeds cognito-local with its tunnel's public URL
+make tunnel-down           # stops both tunnels when you're done
+```
+
+`frontend-run-public` prints the tunnel's URL and a freshly generated Basic Auth
+username/password — share the link and password with your recipient through two different
+channels (e.g. the link in chat, the password read aloud), then have them sign in with one of
+the seeded test accounts (`local/cognito/README.md`). This is entirely opt-in and additive:
+none of `frontend-run`, `auth-run`, `backend-run`, or any other existing target changes
+behavior because this exists.
+
+**One-time setup required before any of this works**: a free ngrok account and a configured
+authtoken (`ngrok config add-authtoken <token>`) — see `local/ngrok/README.md` for the full
+prerequisite steps and the design rationale in
+[ADR-0009](./docs/adr/0009-public-access-via-ngrok.md).
+
 ## Roles (RBAC)
 
 Every route except `/health`, `/docs`, `/redoc`, `/openapi.json` requires a Cognito JWT with a `custom:role` claim of `admin` or `clinic_ops` — see ADR-0004. Signature verification against Cognito's JWKS is still a TODO (`backend/src/shared/auth.py`), so for local testing any unsigned JWT with `sub` and `custom:role` claims works:
